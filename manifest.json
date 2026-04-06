@@ -1,0 +1,16 @@
+{
+  "name": "Medidor árbores",
+  "short_name": "Medidor",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#2d5016",
+  "theme_color": "#2d5016",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/284/284988.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

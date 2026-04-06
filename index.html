@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="gl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Medidor árbores</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
+    <style>
+        :root { --primary:#2d5016;--bg:#f5f5f0;--accent:#ffd700;--danger:#d9534f;--ok:#28a745; }
+        *{box-sizing:border-box}
+        body{font-family:-apple-system,'Helvetica Neue',sans-serif;background:var(--bg);margin:0;overflow:hidden;height:100dvh;color:#222}
+        .screen{display:none;width:100%;height:100dvh;flex-direction:column}
+        .screen.active{display:flex}
+        .header{background:var(--primary);color:white;padding:env(safe-area-inset-top,40px) 15px 14px;text-align:center;flex-shrink:0}
+        .header h1{margin:0;font-size:20px;letter-spacing:.5px}
+        .content{padding:16px;flex:1;overflow-y:auto;padding-bottom:30px}
+        .marcador{background:var(--primary);color:white;padding:18px 15px;border-radius:14px;text-align:center;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+        .marcador h2{margin:0 0 4px;font-size:34px;color:var(--accent)}
+        .marcador p{margin:0;font-size:13px;opacity:.85}
+        .menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .menu-item{background:white;border:2px solid #ddd;border-radius:14px;padding:18px 8px 12px;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+        .menu-item:active{transform:scale(.96);border-color:var(--primary)}
+        .menu-item.accent{border-color:var(--ok);background:#f0fff4}
+        .icon{font-size:30px;display:block;margin-bottom:5px}
+        .menu-item b{font-size:11px;color:var(--primary);text-transform:uppercase;letter-spacing:.5px}
+        .menu-item.accent b{color:#155724}
+        .visor-cont{flex:1;position:relative;background:#000;overflow:hidden}
+        video{width:100%;height:100%;object-fit:cover;display:block}
+        canvas.overlay{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+        .cal-line{position:absolute;top:0;bottom:0;width:4px;background:#007bff;box-shadow:0 0 10px rgba(0,123,255,.8);z-index:6;cursor:ew-resize}
+        #L1{left:30%}#L2{left:70%}
+        .cal-label{position:absolute;top:8px;font-size:11px;background:rgba(0,100,255,.8);color:white;padding:2px 6px;border-radius:4px;transform:translateX(-50%);white-space:nowrap}
+        .h-ref-line{position:absolute;left:8%;right:8%;height:3px;top:50%;background:rgba(255,107,0,.85);box-shadow:0 0 8px rgba(255,107,0,.6);z-index:6;pointer-events:none}
+        .borde-arrow{position:absolute;top:50%;transform:translateY(-100%);width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:14px solid #00ff44;z-index:7;pointer-events:none;transition:left .12s}
+        .cam-ui{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.93);padding:12px 14px calc(env(safe-area-inset-bottom,0px) + 12px);border-radius:20px 20px 0 0;z-index:10}
+        .cam-ui p{margin:0 0 8px;font-size:12px;color:#555;text-align:center}
+        .dap-live{font-size:30px;font-weight:bold;color:var(--primary);text-align:center;margin-bottom:6px}
+        .cv-status{font-size:11px;text-align:center;margin-bottom:8px;color:#999;font-style:italic}
+        #conf-wrap{background:#e0e0e0;border-radius:8px;height:10px;overflow:hidden;margin-bottom:8px}
+        #conf-bar{height:100%;width:0%;border-radius:8px;background:var(--ok);transition:width .15s linear}
+        #conf-bar.cooldown{background:#aaa}
+        #conf-label{font-size:11px;text-align:center;color:#666;margin-bottom:8px}
+        #scan-badge{position:absolute;top:calc(env(safe-area-inset-top,40px) + 8px);left:12px;background:rgba(0,0,0,.65);color:white;padding:6px 12px;border-radius:20px;font-size:14px;font-weight:bold;z-index:20}
+        #gps-badge{position:absolute;top:calc(env(safe-area-inset-top,40px) + 8px);right:12px;background:rgba(0,0,0,.65);color:#00ff88;padding:6px 10px;border-radius:20px;font-size:12px;z-index:20}
+        #capture-flash{position:absolute;inset:0;background:rgba(0,200,80,.4);z-index:30;opacity:0;pointer-events:none;transition:opacity .1s}
+        .btn{width:100%;padding:14px;border:none;border-radius:12px;font-weight:bold;font-size:15px;cursor:pointer}
+        .btn-primary{background:var(--primary);color:white}
+        .btn-danger{background:var(--danger);color:white}
+        .btn+.btn{margin-top:8px}
+        .btn-back{background:none;border:none;color:#666;font-size:14px;padding:10px;cursor:pointer;width:100%}
+        .item-rexistro{display:flex;justify-content:space-between;align-items:center;background:white;border-radius:10px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+        .item-rexistro small{color:#777}
+        .btn-borrar{background:#ffecec;color:var(--danger);border:1px solid #f5b8b8;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;flex-shrink:0}
+        #map{flex:1;width:100%}
+        .prezo-row{display:flex;align-items:center;gap:8px;background:white;border-radius:10px;padding:10px 12px;margin-bottom:8px}
+        .prezo-row span{flex:1;font-weight:600;font-size:14px}
+        .prezo-row input{width:70px;padding:6px;text-align:right;border:1px solid #ddd;border-radius:8px;font-size:14px}
+        .toggle-modo{display:flex;gap:8px;margin-bottom:14px}
+        .toggle-modo button{flex:1;padding:10px;border-radius:10px;border:2px solid #ddd;background:white;font-weight:600;font-size:13px;cursor:pointer}
+        .toggle-modo button.activo{border-color:var(--primary);background:var(--primary);color:white}
+        .sel-esp{width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;margin-bottom:8px;font-size:14px;background:white}
+    </style>
+</head>
+<body>
+
+<!-- INICIO -->
+<section id="home" class="screen active">
+    <div class="header"><h1>🌲 Medidor de árbores</h1></div>
+    <div class="content">
+        <div class="marcador">
+            <h2 id="display-euros">0.00 €</h2>
+            <p><span id="display-count">0</span> árbores · <span id="display-vol">0.000</span> m³</p>
+        </div>
+        <div class="menu-grid">
+            <div class="menu-item" onclick="irA('cal-screen');iniciarCamara('cal')"><span class="icon">⚙️</span><b>Calibración</b></div>
+            <div class="menu-item" onclick="irA('cam-screen');iniciarCamara('medir')"><span class="icon">📸</span><b>Medir</b></div>
+            <div class="menu-item accent" onclick="irA('video-screen');iniciarScan()"><span class="icon">🎬</span><b>Vídeo · Auto</b></div>
+            <div class="menu-item" onclick="irA('map-screen')"><span class="icon">📍</span><b>Mapa</b></div>
+            <div class="menu-item" onclick="irA('prezos-screen')"><span class="icon">💰</span><b>Prezos</b></div>
+            <div class="menu-item" onclick="irA('datos-screen')"><span class="icon">📂</span><b>Inventario</b></div>
+            <div class="menu-item" onclick="exportarExcel()"><span class="icon">📊</span><b>Excel</b></div>
+            <div class="menu-item" onclick="exportarKML()"><span class="icon">🗺️</span><b>KML</b></div>
+        </div>
+    </div>
+</section>
+
+<!-- CALIBRACIÓN -->
+<section id="cal-screen" class="screen">
+    <div class="visor-cont">
+        <video id="video-cal" autoplay playsinline muted></video>
+        <div id="L1" class="cal-line" ontouchstart="dragLine(event,'L1')" onmousedown="dragLine(event,'L1')"><span class="cal-label">0 cm</span></div>
+        <div id="L2" class="cal-line" ontouchstart="dragLine(event,'L2')" onmousedown="dragLine(event,'L2')"><span class="cal-label">30 cm</span></div>
+        <div class="cam-ui">
+            <p>Pon a <b>cinta métrica</b> horizontal. Arrastra as <span style="color:#007bff">liñas azuis</span> ata <b>0 cm</b> e <b>30 cm</b>.</p>
+            <div class="dap-live" style="font-size:17px">Distancia: <span id="cal-dist">—</span> px = 30 cm</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-primary" onclick="gardarCalibracion()">💾 GARDAR</button>
+                <button class="btn-back" onclick="pecharCamara()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- MEDIR MANUAL -->
+<section id="cam-screen" class="screen">
+    <div class="visor-cont">
+        <video id="video-medir" autoplay playsinline muted></video>
+        <canvas id="canvas-cv" class="overlay" style="opacity:.42"></canvas>
+        <div class="h-ref-line"></div>
+        <div id="arrow-L" class="borde-arrow" style="left:35%"></div>
+        <div id="arrow-R" class="borde-arrow" style="left:65%"></div>
+        <div class="cam-ui">
+            <select id="sel-especie" class="sel-esp"></select>
+            <div id="dap-live" class="dap-live">--- cm</div>
+            <div id="cv-status" class="cv-status">Cargando motor de visión…</div>
+            <button id="btn-captura" class="btn btn-danger" onclick="capturarArbore()">📌 CAPTURAR</button>
+            <button class="btn-back" onclick="pecharCamara()">Cancelar</button>
+        </div>
+    </div>
+</section>
+
+<!-- VÍDEO AUTO-SCAN -->
+<section id="video-screen" class="screen">
+    <div class="visor-cont">
+        <video id="video-scan" autoplay playsinline muted></video>
+        <canvas id="canvas-scan" class="overlay" style="opacity:.40"></canvas>
+        <div class="h-ref-line"></div>
+        <div id="arrow-SL" class="borde-arrow" style="left:35%"></div>
+        <div id="arrow-SR" class="borde-arrow" style="left:65%"></div>
+        <div id="scan-badge">🌲 0</div>
+        <div id="gps-badge">📡 GPS…</div>
+        <div id="capture-flash"></div>
+        <div class="cam-ui">
+            <select id="scan-especie" class="sel-esp"></select>
+            <div id="conf-wrap"><div id="conf-bar"></div></div>
+            <div id="conf-label">Apunta ao tronco…</div>
+            <div id="scan-dap" class="dap-live">— cm</div>
+            <div id="scan-status" class="cv-status">Visión cargando…</div>
+            <button class="btn btn-danger" onclick="pararScan()">⏹ PARAR E GARDAR</button>
+        </div>
+    </div>
+</section>
+
+<!-- MAPA -->
+<section id="map-screen" class="screen">
+    <div id="map"></div>
+    <button onclick="irA('home')" style="position:absolute;bottom:30px;left:20px;right:20px;z-index:1000;padding:16px;background:var(--primary);color:white;border:none;border-radius:12px;font-weight:bold;font-size:15px">VOLVER</button>
+</section>
+
+<!-- PREZOS -->
+<section id="prezos-screen" class="screen">
+    <div class="header"><h1>💰 Prezos</h1></div>
+    <div class="content">
+        <div class="toggle-modo">
+            <button id="btn-pie" class="activo" onclick="setModo('pie')">EN PÉ (€/t)</button>
+            <button id="btn-carg" onclick="setModo('carg')">CARGADEIRO (€/t)</button>
+        </div>
+        <div id="lista-prezos"></div>
+        <button class="btn btn-primary" onclick="irA('home')" style="margin-top:8px">VOLVER</button>
+    </div>
+</section>
+
+<!-- INVENTARIO -->
+<section id="datos-screen" class="screen">
+    <div class="header"><h1>📂 Inventario</h1></div>
+    <div class="content">
+        <div id="lista-datos"></div>
+        <button class="btn btn-primary" onclick="irA('home')" style="margin-top:8px">VOLVER</button>
+    </div>
+</section>
