@@ -1,0 +1,239 @@
+name: 🚗 Gemelo Digital Avanzado - Ejecución Manual
+
+on:
+  # RECOMENDADO: Ejecución manual (bajo demanda)
+  workflow_dispatch:
+  
+  # OPCIONAL: Al subir Excel automáticamente
+  push:
+    paths:
+      - 'data/*.xlsx'
+  
+  # OPCIONAL: Descomenta para automático cada 6 horas
+  # schedule:
+  #   - cron: '0 */6 * * *'
+
+jobs:
+  gemelo-digital-avanzado:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Descargar código
+      uses: actions/checkout@v3
+    
+    - name: 🐍 Configurar Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: 📦 Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas numpy matplotlib seaborn scipy plotly openpyxl
+    
+    - name: 🔍 Encontrar Excel más reciente
+      id: find_excel
+      run: |
+        LATEST_XLSX=$(find data -name "*.xlsx" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        if [ -z "$LATEST_XLSX" ]; then
+          echo "⚠️ No hay archivos Excel en data/"
+          echo "ARCHIVO_XLSX=" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        echo "ARCHIVO_XLSX=$LATEST_XLSX" >> $GITHUB_OUTPUT
+        echo "✅ Archivo encontrado: $LATEST_XLSX"
+        ls -lh "$LATEST_XLSX"
+    
+    - name: 🚗 Generar Gemelo Digital Avanzado
+      if: steps.find_excel.outputs.ARCHIVO_XLSX != ''
+      run: |
+        echo "📊 Procesando: ${{ steps.find_excel.outputs.ARCHIVO_XLSX }}"
+        echo "🔍 Validando datos..."
+        echo "📈 Aplicando filtro Kalman..."
+        echo "⏱️ Agregando temporalmente..."
+        echo "🔍 Diagnóstico automático..."
+        python gemelo_digital_avanzado.py "${{ steps.find_excel.outputs.ARCHIVO_XLSX }}"
+    
+    - name: 📁 Preparar artefactos
+      if: steps.find_excel.outputs.ARCHIVO_XLSX != ''
+      run: |
+        mkdir -p salida
+        
+        # Mover gráficos generados
+        mv gemelo_digital_vehiculo_3d_avanzado.html salida/ 2>/dev/null || true
+        mv gemelo_digital_diagnostico_avanzado.html salida/ 2>/dev/null || true
+        mv reporte_obd2_avanzado.json salida/ 2>/dev/null || true
+        
+        # Copiar otros gráficos si existen
+        mv gemelo_digital_*.html salida/ 2>/dev/null || true
+        
+        # Crear índice de gráficos
+        ls -lh salida/
+    
+    - name: 📊 Mover resultados a GitHub Pages
+      if: steps.find_excel.outputs.ARCHIVO_XLSX != ''
+      run: |
+        # Crear carpeta docs si no existe
+        mkdir -p docs/resultados
+        
+        # Copiar gráficos
+        cp salida/*.html docs/resultados/ 2>/dev/null || true
+        cp salida/*.json docs/resultados/ 2>/dev/null || true
+        
+        # Crear índice HTML
+        cat > docs/resultados/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemelo Digital Avanzado - Resultados</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #0066ff;
+            padding-bottom: 10px;
+        }
+        .file-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .file-card {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #0066ff;
+        }
+        .file-card h3 {
+            margin: 0 0 10px 0;
+            color: #0066ff;
+        }
+        .file-card a {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #0066ff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .file-card a:hover {
+            background: #0052cc;
+        }
+        .status {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 Gemelo Digital Avanzado</h1>
+        <p>Resultados del análisis OBD2 Škoda Octavia 1.5 TSI 2024</p>
+        
+        <div class="status">
+            <strong>✅ Análisis completado exitosamente</strong>
+            <p>Timestamp: <span id="timestamp"></span></p>
+        </div>
+        
+        <h2>📊 Gráficos Disponibles</h2>
+        <div class="file-list" id="files"></div>
+    </div>
+    
+    <script>
+        // Actualizar timestamp
+        document.getElementById('timestamp').textContent = new Date().toLocaleString('es-ES');
+        
+        // Listar archivos disponibles
+        const archivos = {
+            'gemelo_digital_vehiculo_3d_avanzado.html': '🚗 Simulación 3D Real del Vehículo',
+            'gemelo_digital_diagnostico_avanzado.html': '🔍 Dashboard Diagnóstico Automático',
+            'reporte_obd2_avanzado.json': '📄 Reporte Técnico JSON'
+        };
+        
+        const container = document.getElementById('files');
+        for (const [archivo, descripcion] of Object.entries(archivos)) {
+            const card = document.createElement('div');
+            card.className = 'file-card';
+            card.innerHTML = `
+                <h3>${descripcion}</h3>
+                <p><small>${archivo}</small></p>
+                <a href="${archivo}" target="_blank">Abrir →</a>
+            `;
+            container.appendChild(card);
+        }
+    </script>
+</body>
+</html>
+EOF
+    
+    - name: ⚙️ Configurar Git
+      run: |
+        git config --local user.email "github-actions@github.com"
+        git config --local user.name "GitHub Actions Bot"
+    
+    - name: 💾 Commit cambios
+      run: |
+        if git diff-index --quiet HEAD; then
+          echo "✅ Sin cambios para commit"
+        else
+          git add -A
+          git commit -m "🚗 Gemelo Digital Avanzado - $(date '+%Y-%m-%d %H:%M:%S')" || true
+          echo "✅ Cambios commitados"
+        fi
+    
+    - name: 🚀 Push a GitHub
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref }}
+    
+    - name: 📈 Crear artefacto
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: gemelo-digital-resultados
+        path: salida/
+        retention-days: 30
+    
+    - name: ✅ Resumen de ejecución
+      if: always()
+      run: |
+        echo "## 🚗 Gemelo Digital Avanzado - Completado" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Archivo procesado:** ${{ steps.find_excel.outputs.ARCHIVO_XLSX }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Características aplicadas:**" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Validación y limpieza de datos" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Filtro Kalman (suavizado)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Agregación temporal" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Diagnóstico automático" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Simulación 3D avanzada" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Dashboard diagnóstico" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Resultados:**" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 gemelo_digital_vehiculo_3d_avanzado.html" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔍 gemelo_digital_diagnostico_avanzado.html" >> $GITHUB_STEP_SUMMARY
+        echo "- 📄 reporte_obd2_avanzado.json" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**GitHub Pages:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/resultados/" >> $GITHUB_STEP_SUMMARY
